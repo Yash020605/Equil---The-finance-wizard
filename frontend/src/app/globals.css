@@ -3,11 +3,27 @@
 @tailwind utilities;
 
 :root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
+  --background: #020617; /* slate-950 */
+  --foreground: #f8fafc; /* slate-50 */
 }
 
 body {
-  background-color: var(--background);
   color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl;
+}
+
+@keyframes pulse-border {
+  0% { border-color: rgba(255, 255, 255, 0.1); }
+  50% { border-color: rgba(99, 102, 241, 0.6); } /* indigo-500 */
+  100% { border-color: rgba(255, 255, 255, 0.1); }
+}
+
+.animate-pulse-border {
+  animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
