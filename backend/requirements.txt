@@ -4,3 +4,6 @@ langchain
 psycopg
 python-multipart
 langgraph-checkpoint-postgres
+langchain-openai
+pandas
+google-cloud-vision

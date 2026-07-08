@@ -1,6 +1,7 @@
 import ctypes
 import gc
 import uuid
+import json
 from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -19,6 +20,18 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "application/pdf", "text/csv"}
+
+def run_vision_extraction(file_bytes: bytearray) -> list:
+    """
+    Mock Google Cloud Vision extraction.
+    In production, this would send the bytes to the Vision API,
+    parse the OCR layout into structured JSON, and return a list of dicts.
+    """
+    return [
+        {"date": "2026-07-01", "description": "ACH DEBIT - Robinhood", "amount": -500.00, "category": "Investment"},
+        {"date": "2026-07-03", "description": "STARBUCKS STORE", "amount": -12.50, "category": "Food"},
+        {"date": "2026-07-05", "description": "DIRECT DEP - PAYROLL", "amount": 4200.00, "category": "Income"}
+    ]
 
 @app.on_event("startup")
 async def startup_event():
@@ -41,7 +54,7 @@ async def upload_document(
     if len(raw_content) > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Payload Too Large")
 
-    # MIME Validation via python-magic (Strict Byte Signature check)
+    # MIME Validation via python-magic
     if magic:
         mime_type = magic.from_buffer(raw_content, mime=True)
         if mime_type not in ALLOWED_MIME_TYPES and not (mime_type == "text/plain" and file.filename.endswith(".csv")):
@@ -51,28 +64,31 @@ async def upload_document(
     file_buffer = bytearray(raw_content)
     
     try:
+        # Pre-Graph Extraction: Extract structured JSON while bytes exist
+        structured_json = run_vision_extraction(file_buffer)
         session_id = str(uuid.uuid4())
-        print(f"Ingesting file {file.filename}. Routing graph logic to Persona: {user_preference} [Session: {session_id}]")
+        
+        # Zero-Trust memory wipe *before* Graph entry
+        char_array = (ctypes.c_char * len(file_buffer)).from_buffer(file_buffer)
+        ctypes.memset(ctypes.addressof(char_array), 0, len(file_buffer))
+        del file_buffer
+        del raw_content
+        gc.collect()
+
+        print(f"Graph Logic Routed to Persona: {user_preference} [Session: {session_id}]")
         
         # Open checkpointer context manager and invoke graph
         async with checkpointer:
             await orchestrator_graph.ainvoke(
-                {"user_preference": user_preference, "transactions": []},
+                {"user_preference": user_preference, "transactions": structured_json, "revision_count": 0},
                 config={"configurable": {"thread_id": session_id}}
             )
         
         return {
             "status": "success",
-            "message": "File ingested securely.",
+            "message": "File ingested securely and memory wiped.",
             "persona_routed": user_preference,
             "session_id": session_id
         }
-    finally:
-        # Cryptographic memory wipe (Zero-Trust)
-        if len(file_buffer) > 0:
-            char_array = (ctypes.c_char * len(file_buffer)).from_buffer(file_buffer)
-            ctypes.memset(ctypes.addressof(char_array), 0, len(file_buffer))
-        
-        del file_buffer
-        del raw_content
-        gc.collect()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
