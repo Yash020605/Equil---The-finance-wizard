@@ -1,9 +1,12 @@
 import ctypes
 import gc
+import uuid
 from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from db import initialize_db, checkpointer
+from agents.orchestrator import orchestrator_graph
 
 try:
     import magic
@@ -16,6 +19,10 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "application/pdf", "text/csv"}
+
+@app.on_event("startup")
+async def startup_event():
+    await initialize_db()
 
 @app.get("/")
 def read_root():
@@ -44,14 +51,21 @@ async def upload_document(
     file_buffer = bytearray(raw_content)
     
     try:
-        # Mocking the graph invocation passing the user_preference...
-        # state = orchestrator_graph.invoke({"user_preference": user_preference, ...})
-        print(f"Ingesting file {file.filename}. Routing graph logic to Persona: {user_preference}")
+        session_id = str(uuid.uuid4())
+        print(f"Ingesting file {file.filename}. Routing graph logic to Persona: {user_preference} [Session: {session_id}]")
+        
+        # Open checkpointer context manager and invoke graph
+        async with checkpointer:
+            await orchestrator_graph.ainvoke(
+                {"user_preference": user_preference, "transactions": []},
+                config={"configurable": {"thread_id": session_id}}
+            )
         
         return {
             "status": "success",
             "message": "File ingested securely.",
-            "persona_routed": user_preference
+            "persona_routed": user_preference,
+            "session_id": session_id
         }
     finally:
         # Cryptographic memory wipe (Zero-Trust)

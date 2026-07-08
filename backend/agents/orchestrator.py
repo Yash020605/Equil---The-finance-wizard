@@ -1,6 +1,10 @@
 import os
+import sys
 from typing import TypedDict, Any, Dict, List
 from langgraph.graph import StateGraph, END
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from db import checkpointer
 
 # ==========================================
 # 1. Prompts & Templates
@@ -40,14 +44,12 @@ def advisory_node(state: GraphState) -> GraphState:
     system_prompt = PROMPT_TEMPLATES.get(pref, PROMPT_TEMPLATES["buffett"])
     
     current_count = state.get("revision_count", 0)
-    # Mock LLM generation guided by persona
     report = f"Draft Report (Revision {current_count}) generated using persona [{pref}]. Guiding philosophy: {system_prompt}"
     return {"advisory_report": report}
 
 def critique_node(state: GraphState) -> GraphState:
     print("Executing: critique_node")
     pref = state.get("user_preference", "buffett")
-    # Mock critique evaluating compliance with persona
     print(f"Critique Node evaluating report against strict {pref} financial values...")
     
     current_count = state.get("revision_count", 0)
@@ -93,4 +95,5 @@ workflow.add_conditional_edges(
     }
 )
 
-orchestrator_graph = workflow.compile()
+# Compile using PostgreSQL Checkpointer
+orchestrator_graph = workflow.compile(checkpointer=checkpointer)

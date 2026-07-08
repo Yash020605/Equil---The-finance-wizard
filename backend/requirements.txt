@@ -3,3 +3,4 @@ langgraph
 langchain
 psycopg
 python-multipart
+langgraph-checkpoint-postgres
