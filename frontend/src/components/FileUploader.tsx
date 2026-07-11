@@ -1,41 +1,48 @@
 "use client";
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from "react";
+import type { UploadResult } from "@/app/page";
 
 interface FileUploaderProps {
-  persona: string;
+  onUploadSuccess: (data: UploadResult) => void;
 }
 
-export default function FileUploader({ persona }: FileUploaderProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+const ACCEPTED = [".pdf", ".png", ".jpg", ".jpeg", ".csv"];
+
+export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
+  const [isDragging, setIsDragging]     = useState(false);
+  const [isUploading, setIsUploading]   = useState(false);
+  const [uploadError, setUploadError]   = useState<string | null>(null);
+  const [uploadedName, setUploadedName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async (file: File) => {
-    if (!file) return;
     setIsUploading(true);
+    setUploadError(null);
+    setUploadedName(file.name);
+
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      
-      // Append the Persona Preference to the payload
-      formData.append('user_preference', persona);
+      formData.append("file", file);
+      formData.append("user_preference", "buffett"); // backend auto-selects; frontend overrides via autoSelectPersona
 
-      const res = await fetch('http://localhost:8000/api/v1/extract/upload', {
-        method: 'POST',
+      const res = await fetch(`${API_BASE}/api/v1/extract/upload`, {
+        method: "POST",
         body: formData,
       });
-      
-      const data = await res.json();
-      console.log('Upload response:', data);
-      
-      if (res.ok) {
-        alert('File securely ingested. Graph Routed to Persona: ' + data.persona_routed);
-      } else {
-        alert(`Upload Failed: ${data.detail || 'Unknown error'}`);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
       }
-    } catch (error) {
-      console.error('Upload failed', error);
-      alert('Network error connecting to Backend.');
+
+      const data: UploadResult = await res.json();
+      onUploadSuccess(data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setUploadError(msg);
+      setUploadedName(null);
     } finally {
       setIsUploading(false);
     }
@@ -44,60 +51,121 @@ export default function FileUploader({ persona }: FileUploaderProps) {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleUpload(e.dataTransfer.files[0]);
-    }
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleUpload(f);
   };
 
   const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleUpload(e.target.files[0]);
-    }
+    const f = e.target.files?.[0];
+    if (f) handleUpload(f);
+    e.target.value = "";
   };
 
   return (
-    <div 
-      className={`glass-panel p-8 text-center transition-all duration-300 ${isDragging ? 'animate-pulse-border bg-white/10 scale-[1.02]' : 'hover:bg-white/10 hover:border-white/20'}`}
-      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={onDrop}
-    >
-      <input 
-        type="file" 
-        className="hidden" 
-        ref={fileInputRef} 
-        onChange={onFileSelect}
-        accept=".pdf,.png,.jpg,.jpeg,.csv" 
-      />
-      
-      <div className="flex flex-col items-center justify-center space-y-4">
-        <div className="p-4 bg-indigo-500/20 rounded-full">
-          {isUploading ? (
-            <svg className="w-8 h-8 text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          ) : (
-            <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-          )}
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-slate-200 tracking-tight">
-            {isUploading ? 'Ingesting securely...' : 'Secure Ingestion'}
-          </h3>
-          <p className="text-sm text-slate-400 mt-1">Routing via: <span className="text-indigo-300 font-semibold capitalize">{persona}</span></p>
-          <p className="text-xs text-slate-500 mt-2">Supported: PDF, PNG, JPEG, CSV</p>
-        </div>
-        <button 
-          disabled={isUploading}
-          onClick={() => fileInputRef.current?.click()}
-          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-indigo-500/25 active:scale-95 disabled:opacity-50"
-        >
-          {isUploading ? 'Processing...' : 'Browse Files'}
-        </button>
+    <div className="glass-panel p-6 flex flex-col gap-5">
+
+      {/* Title row */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-slate-200 tracking-tight flex items-center gap-2">
+          <span className="w-1.5 h-4 rounded-full bg-teal-500 inline-block" />
+          Secure Ingestion
+        </h2>
+        <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-widest">
+          Zero-Trust
+        </span>
       </div>
+
+      {/* Drop zone */}
+      <div
+        onClick={() => !isUploading && fileInputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={onDrop}
+        className={`
+          relative cursor-pointer rounded-xl border-2 border-dashed transition-all duration-300 p-8
+          flex flex-col items-center justify-center gap-3 text-center
+          ${isDragging
+            ? "animate-pulse-border bg-teal-500/[0.06] border-teal-500/50"
+            : "border-slate-700/60 hover:border-slate-600 hover:bg-white/[0.02]"
+          }
+          ${isUploading ? "pointer-events-none" : ""}
+        `}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept={ACCEPTED.join(",")}
+          onChange={onFileSelect}
+        />
+
+        {isUploading ? (
+          <>
+            <div className="w-12 h-12 rounded-full border-2 border-slate-700 border-t-teal-500 animate-spin" />
+            <div>
+              <p className="text-sm font-semibold text-slate-300">Processing…</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]">{uploadedName}</p>
+            </div>
+          </>
+        ) : uploadedName && !uploadError ? (
+          <>
+            <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+              <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-emerald-400">Ingested successfully</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[200px]">{uploadedName}</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700/50 flex items-center justify-center">
+              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-300">
+                {isDragging ? "Drop to upload" : "Drag & drop your statement"}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">or click to browse</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Error banner */}
+      {uploadError && (
+        <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/25 rounded-xl px-4 py-3">
+          <svg className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <div>
+            <p className="text-xs font-semibold text-red-400">Upload failed</p>
+            <p className="text-xs text-slate-400 mt-0.5">{uploadError}</p>
+          </div>
+          <button onClick={() => setUploadError(null)} className="ml-auto text-slate-600 hover:text-slate-400">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Accepted formats */}
+      <div className="flex flex-wrap gap-2">
+        {ACCEPTED.map(ext => (
+          <span key={ext} className="text-[10px] font-mono font-semibold text-slate-600 bg-slate-800/60 border border-slate-700/40 px-2 py-0.5 rounded-md uppercase">
+            {ext.replace(".", "")}
+          </span>
+        ))}
+        <span className="text-[10px] text-slate-600 ml-auto self-center">Max 20 MB</span>
+      </div>
+
     </div>
   );
 }

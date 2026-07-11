@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --background: #020617; /* slate-950 */
-  --foreground: #f8fafc; /* slate-50 */
+  --background: #020617;
+  --foreground: #f8fafc;
 }
 
 body {
@@ -13,17 +13,53 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Glassmorphism utilities */
+/* Glassmorphism panel */
 .glass-panel {
-  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl;
+  @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] shadow-2xl rounded-2xl;
 }
 
+/* Upload drag-active border pulse — teal only */
 @keyframes pulse-border {
-  0% { border-color: rgba(255, 255, 255, 0.1); }
-  50% { border-color: rgba(99, 102, 241, 0.6); } /* indigo-500 */
-  100% { border-color: rgba(255, 255, 255, 0.1); }
+  0%   { border-color: rgba(255, 255, 255, 0.08); }
+  50%  { border-color: rgba(20, 184, 166, 0.55); }
+  100% { border-color: rgba(255, 255, 255, 0.08); }
+}
+.animate-pulse-border {
+  animation: pulse-border 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-.animate-pulse-border {
-  animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+/* Animated gradient background blob */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-18px) scale(1.03); }
 }
+.animate-float { animation: float 7s ease-in-out infinite; }
+
+/* Shimmer skeleton loader */
+@keyframes shimmer {
+  0%   { background-position: -800px 0; }
+  100% { background-position: 800px 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+/* Smooth page-section fade-in */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.45s ease-out forwards; }
+
+/* Progress bar fill */
+@keyframes fillBar {
+  from { width: 0%; }
+}
+.bar-animate { animation: fillBar 1s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }

@@ -1,49 +1,75 @@
 version: '3.8'
 
+# Load all variables from the project-root .env file
+# so no secrets are hardcoded anywhere in this file.
+
 services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — LangGraph checkpointer + app data
+  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:15-alpine
     container_name: equil_db
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-equil_user}
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-equil_db}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "5433:5432"   # 5432 is occupied by the urban_heat_db container
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - equil_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U equil_user -d equil_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
+  # ---------------------------------------------------------------------------
+  # FastAPI Backend
+  # ---------------------------------------------------------------------------
   backend:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: equil_backend
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - .env
+    environment:
+      # Internal docker network always uses container port 5432, not the host-mapped port
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
+      NVIDIA_MODEL: ${NVIDIA_MODEL:-nvidia/nemotron-4-340b-instruct}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
     ports:
       - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-equil_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-equil_db}
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
+  # ---------------------------------------------------------------------------
+  # Next.js Frontend
+  # ---------------------------------------------------------------------------
   frontend:
-    build: 
+    build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: equil_frontend
-    command: npm run dev
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - backend
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
+  equil_postgres_data:

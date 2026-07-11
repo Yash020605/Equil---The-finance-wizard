@@ -1,9 +1,26 @@
 fastapi
+uvicorn[standard]
 langgraph
 langchain
-psycopg
-python-multipart
-langgraph-checkpoint-postgres
 langchain-openai
+langchain-nvidia-ai-endpoints
+langgraph-checkpoint-postgres
+psycopg[binary]
+psycopg-pool
+python-multipart
+python-jose[cryptography]
+slowapi
+python-magic-bin; sys_platform == "win32"
+python-magic; sys_platform != "win32"
 pandas
+numpy
+PyPDF2
+pytesseract
+Pillow
 google-cloud-vision
+python-dotenv
+splitwise
+requests
+beautifulsoup4
+python-docx  
+ 
